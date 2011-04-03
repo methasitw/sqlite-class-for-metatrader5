@@ -1,6 +1,6 @@
 //+------------------------------------------------------------------+
 //|                                                      csqlite.mqh |
-//|                                                            Graff |
+//|                                            s.cornushov aka Graff |
 //|                                              http://www.mql5.com |
 //+------------------------------------------------------------------+
 #property copyright "Graff"
@@ -42,47 +42,82 @@
 //| DLL imports                                                      |
 //+------------------------------------------------------------------+
 #import "sqlite3.dll"
-int sqlite3_open16(string filename,/* Database filename (UTF-8) */
-                   int &db_h       /* OUT: SQLite db handle */
-                   );
-int sqlite3_finalize(int h);
-int sqlite3_close(int h);
-
-int sqlite3_prepare(
-                    int h,/* Database handle */
-                    uchar &zSql[],/* SQL statement, UTF-8 encoded */
-                    int nByte,/* Maximum length of zSql in bytes. */
-                    int &ppStmt,/* OUT: Statement handle */
-                    uchar &pzTail[]/* OUT: Pointer to unused portion of zSql */
+uint sqlite3_open16(string filename,/* Database filename (UTF-8) */
+                    uint &db_h       /* OUT: SQLite db handle */
                     );
-int sqlite3_exec(
-                 int h,/* An open database */
-                 uchar &SqlQ[],/* SQL to be evaluated */
-                 int callback,/* Callback function */
-                 string s,/* 1st argument to callback */
-                 string error                              /* Error msg written here UCHAR */
-                 );
-int sqlite3_column_count(int stmt_h);
+uint sqlite3_finalize(uint h);
+uint sqlite3_close(uint h);
 
-int sqlite3_step(int stmt_h);
+uint sqlite3_prepare(
+                     uint h,/* Database handle */
+                     uchar &zSql[],/* SQL statement, UTF-8 encoded */
+                     uint nByte,/* Maximum length of zSql in bytes. */
+                     uint &ppStmt,/* OUT: Statement handle */
+                     uchar &pzTail[]/* OUT: Pointer to unused portion of zSql */
+                     );
 
-string sqlite3_column_text16(int stmt_h,int iCol);
+uint sqlite3_prepare_v2(
+                        uint h,/* Database handle */
+                        uchar &zSql[],/* SQL statement, UTF-8 encoded */
+                        uint nByte,/* Maximum length of zSql in bytes. */
+                        uint &ppStmt,/* OUT: Statement handle */
+                        uchar &pzTail[]/* OUT: Pointer to unused portion of zSql */
+                        );
 
-string sqlite3_errmsg16(int h); // error message
+uint sqlite3_prepare16(
+                       uint h,/* Database handle */
+                       string q,/* SQL statement, UTF-16 encoded */
+                       uint nByte,/* Maximum length of zSql in bytes. */
+                       uint &ppStmt,/* OUT: Statement handle */
+                       uint pointer=0/* OUT: Pointer to unused portion of zSql */
+                       );
 
-int sqlite3_next_stmt(int h,int stmt_h); // 2nd param can be NULL
+uint sqlite3_prepare16_v2(
+                          uint h,/* Database handle */
+                          string q,/* SQL statement, UTF-16 encoded */
+                          uint nByte,/* Maximum length of zSql in bytes. */
+                          uint &ppStmt,/* OUT: Statement handle */
+                          uint pointer=0/* OUT: Pointer to unused portion of zSql */
+                          );
+
+uint sqlite3_exec(
+                  uint h,/* An open database */
+                  uchar &SqlQ[],/* SQL to be evaluated */
+                  uint callback,/* Callback function */
+                  string s,/* 1st argument to callback */
+                  string error                              /* Error msg written here UCHAR */
+                  );
+uint sqlite3_column_count(uint stmt_h);
+
+uint sqlite3_step(uint stmt_h);
+
+string sqlite3_column_text16(uint stmt_h,uint iCol);
+
+string sqlite3_errmsg16(uint h); // error message
+
+uint sqlite3_next_stmt(uint h,uint stmt_h); // 2nd param can be NULL
 
 #import
 //+------------------------------------------------------------------+
-//|  Main class
+//|   struct to export sql results
+//+------------------------------------------------------------------+
+struct sql_results// sql results export struct
+  {
+   string            value[];
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
 //+------------------------------------------------------------------+
 class CSQLite
   {
 public:
    bool              connect(string db_file);
    bool              exec(string query);
+   string            get_cell(string query);
+   //uint              get_array(string query,string &out[][1]);
+   uint              get_array(string query,sql_results &out[]);
    void             ~CSQLite(); // деструктор
-                                //private:
+private:
    int               db_hwd; // db connection handle
    uchar             db_stmt[];
    int               db_stmt_h; // query handle
@@ -99,7 +134,7 @@ bool CSQLite::connect(string db_file)
    return(true);
   }
 //+------------------------------------------------------------------+
-//|   Destuctor
+//|   деструктор  
 //+------------------------------------------------------------------+
 void CSQLite::~CSQLite()
   {
@@ -121,5 +156,60 @@ bool CSQLite::exec(string query)
    if(sqlite3_exec(db_hwd,q,NULL,NULL,NULL)!=SQLITE_OK){ Print("SQLite exec failure. Error "+sqlite3_errmsg16(db_hwd)); return(false); }
    ArrayFree(q);
    return(true);
+  }
+//+------------------------------------------------------------------+
+//|   This fanction will return only the first column of the first row (A:1)
+//+------------------------------------------------------------------+
+string CSQLite::get_cell(string query)
+  {
+   uchar out[];
+   uchar q[];
+   u2a(query,q);
+   if(sqlite3_prepare_v2(db_hwd,q,ArraySize(q),db_stmt_h,out)!=SQLITE_OK) Print("SQLite prepare failure. Error "+sqlite3_errmsg16(db_hwd));
+   ArrayFree(q); ArrayFree(out);
+   if(sqlite3_column_count(db_stmt_h)>1) Print("Warning! Query returned more than one cell. Function get_cell will return only one cell.");
+   if(sqlite3_step(db_stmt_h)!=SQLITE_ROW) {Print("Error: get_cell query didnt returned results."); sqlite3_finalize(db_stmt_h); return(NULL);}
+   string r=sqlite3_column_text16(db_stmt_h,0);
+   sqlite3_finalize(db_stmt_h);
+   return(r);
+  }
+//+------------------------------------------------------------------+
+//|   This fanction will return only the first column of the first row (A:1)
+//+------------------------------------------------------------------+
+//uint CSQLite::get_array(string query,string &out[][1])
+uint CSQLite::get_array(string query,sql_results &out[])
+  {
+   uchar prep_out[];
+   uchar q[];
+   u2a(query,q);
+   if(sqlite3_prepare_v2(db_hwd,q,ArraySize(q),db_stmt_h,prep_out)!=SQLITE_OK) Print("SQLite prepare failure. Error "+sqlite3_errmsg16(db_hwd));
+   ArrayFree(q); ArrayFree(prep_out);
+   uint column_count=sqlite3_column_count(db_stmt_h);
+   uint i=0;
+   while(sqlite3_step(db_stmt_h)==SQLITE_ROW)
+     {
+      ArrayResize(out,i+1);
+      ArrayResize(out[i].value,column_count);
+      for(uint j=0;j<column_count;j++)
+        {
+         out[i].value[j]=sqlite3_column_text16(db_stmt_h,j);
+        }
+      i++;
+     }
+/*while(sqlite3_step(db_stmt_h)==SQLITE_ROW)
+     {
+      ArrayResize(out,((i+1)*(column_count+1))*2);
+      for(uint j=0;j<column_count;j++)
+        {
+         //ArrayResize(out,ArraySize(out)+2);
+         Comment(i+" "+j+" ArSize "+ArraySize(out));
+         out[i][j]=sqlite3_column_text16(db_stmt_h,j);
+
+        }
+
+      i++;
+     }*/
+   sqlite3_finalize(db_stmt_h);
+   return(i);
   }
 //+------------------------------------------------------------------+
