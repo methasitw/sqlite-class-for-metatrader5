@@ -29,17 +29,17 @@ int OnInit()
    db.reset();
    db.bind_text(1,"bind 1");
    db.bind_text(2,"bind 2");
-   if(db.step()!=SQLITE_DONE) Print("INSERT ERR No= ");
+   if(db.step()!=SQLITE_DONE) Print("INSERT transaction error:  "+db.error());
 
    db.reset();
    db.bind_int(1,3);
    db.bind_int(2,4);
-   if(db.step()!=SQLITE_DONE) Print("INSERT ERR No= ");
+   if(db.step()!=SQLITE_DONE) Print("INSERT transaction error:  "+db.error());
 
    db.reset();
    db.bind_double(1,5.2);
    db.bind_double(2,6.6);
-   if(db.step()!=SQLITE_DONE) Print("INSERT ERR No= ");
+   if(db.step()!=SQLITE_DONE) Print("INSERT transaction error:  "+db.error());
 
    db.finalize();
 
